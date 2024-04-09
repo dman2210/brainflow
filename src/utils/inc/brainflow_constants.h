@@ -87,6 +87,8 @@ enum class BoardIds : int
     AAVAA_V3_BOARD = 53,
     EXPLORE_PLUS_8_CHAN_BOARD = 54,
     EXPLORE_PLUS_32_CHAN_BOARD = 55,
+    NTL_AXON_BLE_BOARD = 56,
+    NTL_AXON_COM_BOARD = 57,
     // use it to iterate
     FIRST = PLAYBACK_FILE_BOARD,
     LAST = EXPLORE_PLUS_32_CHAN_BOARD
