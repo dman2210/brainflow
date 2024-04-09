@@ -6,6 +6,8 @@
 
 
 #define START_BYTE 0x0A
+#define write_characteristic_uuid "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+#define notify_characteristic_uuid "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 static void ntl_adapter_1_on_scan_found (
     simpleble_adapter_t adapter, simpleble_peripheral_t peripheral)
@@ -131,9 +133,55 @@ int NTLAxon::prepare_session ()
         }
         // TODO
         // check to see which characteristic is which
-        // notify
-        // set settings
-
+        if (strcmp (service.characteristics[0].uuid.value, write_characteristic_uuid))
+        {
+            write_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
+                service.uuid, service.characteristics[0].uuid);
+            control_characteristics_found = true;
+            safe_logger (spdlog::level::info, "found control characteristic");
+            if (strcmp (service.characteristics[1].uuid.value, notify_characteristic_uuid) == 0)
+            {
+                if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
+                        service.characteristics[1].uuid, ::ntlAxon_read_notifications,
+                        (void *)this) == SIMPLEBLE_SUCCESS)
+                {
+                    notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
+                        service.uuid, service.characteristics[1].uuid);
+                }
+                else
+                {
+                    safe_logger (spdlog::level::err, "failed to notify characteristic");
+                    res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+                }
+            }
+        }
+        else if (strcmp (service.characteristics[1].uuid.value, write_characteristic_uuid))
+        {
+            write_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
+                service.uuid, service.characteristics[1].uuid);
+            control_characteristics_found = true;
+            safe_logger (spdlog::level::info, "found control characteristic");
+            if (strcmp (service.characteristics[0].uuid.value, notify_characteristic_uuid) == 0)
+            {
+                if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
+                        service.characteristics[0].uuid, ::ntlAxon_read_notifications,
+                        (void *)this) == SIMPLEBLE_SUCCESS)
+                {
+                    notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
+                        service.uuid, service.characteristics[0].uuid);
+                }
+            }
+            else
+            {
+                safe_logger (spdlog::level::err, "failed to notify characteristic");
+                res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+            }
+        }
+        else
+        {
+            safe_logger (spdlog::level::err, "failed to find control characteristic");
+            res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+        }
         if ((res == (int)BrainFlowExitCodes::STATUS_OK) && (control_characteristics_found))
         {
             initialized = true;
@@ -144,4 +192,101 @@ int NTLAxon::prepare_session ()
         }
         return res;
     }
+}
+
+int NTLAxon::start_stream (int buffer_size, const char *streamer_params)
+{
+    if (!initialized)
+    {
+        return (int)BrainFlowExitCodes::BOARD_NOT_CREATED_ERROR;
+    }
+    int res = prepare_for_acquisition (buffer_size, streamer_params);
+    if (res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        // TODO get command for start
+        res = send_command ("start");
+    }
+    if (res == (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        safe_logger (spdlog::level::debug, "Start command Send 0x8000000d");
+        is_streaming = true;
+    }
+
+    return res;
+}
+
+int NTLAxon::stop_stream ()
+{
+    if (ntlAxonPeripheral == NULL)
+    {
+        return (int)BrainFlowExitCodes::BOARD_NOT_CREATED_ERROR;
+    }
+    int res = (int)BrainFlowExitCodes::STATUS_OK;
+    if (is_streaming)
+    {
+        res = send_command ("stop");
+    }
+    else
+    {
+        res = (int)BrainFlowExitCodes::STREAM_ALREADY_RUN_ERROR;
+    }
+    is_streaming = false;
+    return res;
+}
+
+int NTLAxon::release_session ()
+{
+    if (initialized)
+    {
+        // looped previously to prevent a crash
+        for (int i = 0; i < 2; i++)
+        {
+            stop_stream ();
+            // need to wait for notifications to stop triggered before unsubscribing, otherwise
+            // macos fails inside simpleble with timeout
+#ifdef _WIN32
+            Sleep (2000);
+#else
+            sleep (2);
+#endif
+            if (simpleble_peripheral_unsubscribe (ntlAxonPeripheral, notified_characteristics.first,
+                    notified_characteristics.second) != SIMPLEBLE_SUCCESS)
+            {
+                safe_logger (spdlog::level::err, "failed to unsubscribe for {} {}",
+                    notified_characteristics.first.value, notified_characteristics.second.value);
+            }
+            else
+            {
+                break;
+            }
+        }
+        free_packages ();
+        initialized = false;
+    }
+    if (ntlAxonPeripheral != NULL)
+    {
+        bool is_connected = false;
+        if (simpleble_peripheral_is_connected (ntlAxonPeripheral, &is_connected) ==
+            SIMPLEBLE_SUCCESS)
+        {
+            if (is_connected)
+            {
+                simpleble_peripheral_disconnect (ntlAxonPeripheral);
+            }
+        }
+        simpleble_peripheral_release_handle (ntlAxonPeripheral);
+        ntlAxonPeripheral = NULL;
+    }
+    if (ntlAxonAdapter != NULL)
+    {
+        simpleble_adapter_release_handle (ntlAxonAdapter);
+        ntlAxonAdapter = NULL;
+    }
+    return (int)BrainFlowExitCodes::STATUS_OK;
+}
+
+static void ntlAxon_read_notifications (simpleble_uuid_t service, simpleble_uuid_t characteristic,
+    uint8_t *data, size_t size, void *board)
+{
+    ((NTLAxon *)(board))->read_data (service, characteristic, data, size, 0);
 }
