@@ -6,11 +6,12 @@
 
 
 #define START_BYTE 0x0A
+#define STOP_BYTE 0x0D
 #define write_characteristic_uuid "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define notify_characteristic_uuid "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 static void ntl_adapter_1_on_scan_found (
-    simpleble_adapter_t adapter, simpleble_peripheral_t peripheral)
+    simpleble_adapter_t adapter, simpleble_peripheral_t peripheral, void *board)
 {
     ((NTLAxon *)(board))->adapter_1_on_scan_found (adapter, peripheral);
 }
@@ -40,7 +41,7 @@ int NTLAxon::prepare_session ()
 {
     if (initialized)
     {
-        safe_logger ("Session already prepared");
+        safe_logger (spdlog::level::info, "Session already prepared");
         return (int)BrainFlowExitCodes::STATUS_OK;
     }
     if (params.timeout < 1)
@@ -51,7 +52,7 @@ int NTLAxon::prepare_session ()
     size_t num_adapters = simpleble_adapter_get_count ();
     if (num_adapters == 0)
     {
-        safe_logger ("No BLE adapters found");
+        safe_logger (spdlog::level::err, "No BLE adapters found");
         return (int)BrainFlowExitCodes::UNABLE_TO_OPEN_PORT_ERROR;
     }
     // get a handle on the first adapter on the computer
@@ -66,7 +67,7 @@ int NTLAxon::prepare_session ()
 
     if (!simpleble_adapter_is_bluetooth_enabled ())
     {
-        safe_logger ("Bluetooth appears disabled");
+        safe_logger (spdlog::level::warn, "Bluetooth appears disabled");
         // dont throw an exception because of this
         // https://github.com/OpenBluetoothToolbox/SimpleBLE/issues/115
     }
@@ -204,7 +205,7 @@ int NTLAxon::start_stream (int buffer_size, const char *streamer_params)
     if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         // TODO get command for start
-        res = send_command ("start");
+        res = sendCommand ("start");
     }
     if (res == (int)BrainFlowExitCodes::STATUS_OK)
     {
@@ -224,7 +225,7 @@ int NTLAxon::stop_stream ()
     int res = (int)BrainFlowExitCodes::STATUS_OK;
     if (is_streaming)
     {
-        res = send_command ("stop");
+        res = sendCommand ("stop");
     }
     else
     {
@@ -289,4 +290,115 @@ static void ntlAxon_read_notifications (simpleble_uuid_t service, simpleble_uuid
     uint8_t *data, size_t size, void *board)
 {
     ((NTLAxon *)(board))->read_data (service, characteristic, data, size, 0);
+}
+
+void NTLAxon::adapter_1_on_scan_found (
+    simpleble_adapter_t adapter, simpleble_peripheral_t peripheral)
+{
+    char *peripheral_identifier = simpleble_peripheral_identifier (peripheral);
+    char *peripheral_address = simpleble_peripheral_address (peripheral);
+    bool found = false;
+    if (!params.mac_address.empty ())
+    {
+        if (strcmp (peripheral_address, params.mac_address.c_str ()) == 0)
+        {
+            found = true;
+        }
+    }
+    else
+    {
+        if (!params.serial_number.empty ())
+        {
+            if (strcmp (peripheral_identifier, params.serial_number.c_str ()) == 0)
+            {
+                found = true;
+            }
+        }
+        else
+        {
+            if (strncmp (peripheral_identifier, "NTLAxon", 10) == 0)
+            {
+                found = true;
+            }
+        }
+    }
+    safe_logger (spdlog::level::trace, "address {}", peripheral_address);
+    simpleble_free (peripheral_address);
+    safe_logger (spdlog::level::trace, "identifier {}", peripheral_identifier);
+    simpleble_free (peripheral_identifier);
+
+    if (found)
+    {
+        {
+            std::lock_guard<std::mutex> lk (m);
+            ntlAxonPeripheral = peripheral;
+        }
+        cv.notify_one ();
+    }
+    else
+    {
+        simpleble_peripheral_release_handle (peripheral);
+    }
+}
+
+// Standard data packet:
+//     Byte 1: 0xA0
+//     Byte 2: Sample number
+//     Bytes 3-[N-(3+n)]: Data values for all modules, in series
+//     ...
+//     Byte [N-(2+n)]: Status
+//     Byte [N-1]: Battery level
+//     Byte [N]: 0xCX where X is 0-F in hex
+
+void NTLAxon::read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic, uint8_t *data,
+    size_t size, int channel_num)
+{
+    if ((data[0] == START_BYTE) && (data[45] == STOP_BYTE))
+    {
+        double package_data[13] = {0};
+        for (int i = 3; i < 11; i++)
+        {
+            package_data[i - 3] = (double)data[i];
+        }
+        // status
+        package_data[8] = (double)data[11];
+        // battery level
+        package_data[9] = (double)data[12];
+        push_package (&package_data[0]);
+    }
+}
+
+int NTLAxon::sendCommand (std::string commandString)
+{
+    if (!initialized)
+    {
+        return (int)BrainFlowExitCodes::BOARD_NOT_CREATED_ERROR;
+    }
+    bool result = false;
+    if (strcmp (commandString.data (), "start") == 0)
+    {
+        uint8_t command[8] = {0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x0a, 0x0d};
+        result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
+            write_characteristics.second, command, 6);
+    }
+    else if (strcmp (commandString.data (), "stop") == 0)
+    {
+        uint8_t command[7] = {0x0a, 0x73, 0x74, 0x6f, 0x70, 0x0a, 0x0d};
+        result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
+            write_characteristics.second, command, 5);
+    }
+    else
+    {
+        safe_logger (spdlog::level::err, "Unknown command");
+        return (int)BrainFlowExitCodes::INVALID_ARGUMENTS_ERROR;
+    }
+    if (result)
+    {
+        return (int)BrainFlowExitCodes::STATUS_OK;
+    }
+    else
+    {
+        safe_logger (spdlog::level::err, "failed to send command {} to device");
+        return (int)BrainFlowExitCodes::BOARD_WRITE_ERROR;
+    }
 }
