@@ -350,6 +350,77 @@ void NTLAxon::adapter_1_on_scan_found (
 //     Byte [N-1]: Battery level
 //     Byte [N]: 0xCX where X is 0-F in hex
 
+// 8-channel data packet: 
+// Byte 1: 0x0A
+// Byte 2: Sample number (one byte)
+// Bytes 3-5: Data value for EEG channel 1 (three bytes, 24-bit)
+// Bytes 6-8: Data value for EEG channel 2
+// Bytes 9-12: Data value for EEG channel 3
+// Bytes 13-15: Data value for EEG channel 4
+// Bytes 16-18: Data value for EEG channel 5
+// Bytes 19-21: Data value for EEG channel 6
+// Bytes 22-24: Data value for EEG channel 7
+// Bytes 25-27: Data value for EEG channel 8
+// Byte 28-29: Status (two bytes)
+// Byte 30: Battery level (one byte) 0-100%
+// Byte 31: 0x0D
+
+// 16-channel data packet: 
+// Byte 1: 0x0A
+// Byte 2: Sample number (one byte)
+// Bytes 3 - 5: Data value for EEG1 channel 1 (three bytes, 24-bit)
+// Bytes 6 - 8: Data value for EEG1 channel 2
+// Bytes 9 -12: Data value for EEG1 channel 3
+// Bytes 13-15: Data value for EEG1 channel 4
+// Bytes 16-18: Data value for EEG1 channel 5
+// Bytes 19-21: Data value for EEG1 channel 6
+// Bytes 22-24: Data value for EEG1 channel 7
+// Bytes 25-27: Data value for EEG1 channel 8
+// Bytes 28-30: Data value for EEG2 channel 1 
+// Bytes 31-33: Data value for EEG2 channel 2
+// Bytes 34-36: Data value for EEG2 channel 3
+// Bytes 37-39: Data value for EEG2 channel 4
+// Bytes 40-42: Data value for EEG2 channel 5
+// Bytes 43-45: Data value for EEG2 channel 6
+// Bytes 46-48: Data value for EEG2 channel 7
+// Bytes 49-51: Data value for EEG2 channel 8
+// Byte 52-53: Status (two bytes)
+// Byte 54: Battery level (one byte)
+// Byte 55: 0x0D
+
+// ADS1299 8-channel expansion module subpacket format: 
+// Bytes 1-3: Data value for EEG channel 1
+// Bytes 4-6: Data value for EEG channel 2
+// Bytes 7-8: Data value for EEG channel 3
+// Bytes 9-12: Data value for EEG channel 4
+// Bytes 13-15: Data value for EEG channel 5
+// Bytes 16-18: Data value for EEG channel 6
+// Bytes 19-21: Data value for EEG channel 7
+// Bytes 22-24: Data value for EEG channel 8
+
+// Initialization packet info
+// There are a total of 8 positions for modules. They can either be filled or empty.
+// Each type of module will have a unique identifier. 
+// Empty position: 0x01
+// ADS1299 8-channel EEG module: 0x02
+// Other modules: 0x03 and up
+
+// The standard packet should be constructed based on the initialization packet that is recieved. 
+// For each module identifier, it will have a fixed definition of what data is contained and how to parse it. 
+
+// Continuously posting this packet to the TX channel until there's a start command
+// Initialization packet: 
+// Byte 1: 0x0A
+// Byte 2: Module ID at position 1 0x02
+// Byte 3: Module ID at position 2 0x01
+// Byte 4: Module ID at position 3 0x01
+// Byte 5: Module ID at position 4 0x01
+// Byte 6: Module ID at position 5 0x01
+// Byte 7: Module ID at position 6 0x01
+// Byte 8: Module ID at position 7 0x01
+// Byte 9: Module ID at position 8 0x01
+// Byte 10: 0x0D
+
 void NTLAxon::read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic, uint8_t *data,
     size_t size, int channel_num)
 {
