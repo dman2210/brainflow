@@ -6,11 +6,11 @@
 #include "board.h"
 #include "board_controller.h"
 
-class NTLAxon : public BLELibBoard
+class NTLAxonBLEBoard : public BLELibBoard
 {
 public:
-    NTLAxon (struct BrainFlowInputParams params);
-    ~NTLAxon ();
+    NTLAxonBLEBoard (struct BrainFlowInputParams params);
+    ~NTLAxonBLEBoard ();
 
     int prepare_session ();
     int start_stream (int buffer_size, const char *streamer_params);
