@@ -3,8 +3,9 @@
 #include "custom_cast.h"
 #include "ntl_axon_ble.h"
 #include "timestamp.h"
+#include "brainflow_boards.h"
 
-
+#define BOARDID 56
 #define START_BYTE 0x0A
 #define STOP_BYTE 0x0D
 #define write_characteristic_uuid "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -165,7 +166,7 @@ int NTLAxonBLEBoard::prepare_session ()
             if (strcmp (service.characteristics[0].uuid.value, notify_characteristic_uuid) == 0)
             {
                 if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
-                        service.characteristics[0].uuid, ::ntlAxon_read_notifications,
+                        service.characteristics[0].uuid, ::ntl_read_notifications,
                         (void *)this) == SIMPLEBLE_SUCCESS)
                 {
                     notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
@@ -353,6 +354,33 @@ void NTLAxonBLEBoard::adapter_1_on_scan_found (
 void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic,
     uint8_t *data, size_t size, int channel_num)
 {
+    // boards_struct
+                // .brainflow_boards_json["boards"][std::to_string (board_id)][preset_str][param_name];
+    if(size==10){
+        //figure out how many eeg channels and their locations
+        
+    //     {
+    //     {"name", "Cyton"},
+    //     {"sampling_rate", 250},
+    //     {"package_num_channel", 0},
+    //     {"timestamp_channel", 22},
+    //     {"marker_channel", 23},
+    //     {"num_rows", 24},
+    //     {"eeg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
+    //     {"eeg_names", "Fp1,Fp2,C3,C4,P7,P8,O1,O2"},
+    //     {"emg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
+    //     {"ecg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
+    //     {"eog_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
+    //     {"accel_channels", {9, 10, 11}},
+    //     {"analog_channels", {19, 20, 21}},
+    //     {"other_channels", {12, 13, 14, 15, 16, 17, 18}}
+    // };
+        boards_struct.brainflow_boards_json["boards"][std:to_string(56)]["default"][""]
+        //initialization packet
+        //set channel definitions
+        //set package size and channel destinations
+    }
+    //loop through incoming package and map into outgoing packet
     if ((data[0] == START_BYTE) && (data[45] == STOP_BYTE))
     {
         double package_data[13] = {0};
