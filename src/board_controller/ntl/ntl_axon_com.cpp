@@ -1,11 +1,17 @@
 #include <string.h>
 
+#include "brainflow_boards.h"
+#include "custom_cast.h"
 #include "ntl_axon_com.h"
 #include "serial.h"
 
 #ifdef _WIN32
 #include "windows_registry.h"
 #endif
+
+#define BOARDID 57
+#define START_BYTE 0x0A
+#define STOP_BYTE 0x0D
 
 // commands
 // i for init (com only)
@@ -247,8 +253,52 @@ int NTLAxonComBoard::prepare_session ()
     }
 
     initialized = true;
-    // TODO add extra command and parsing for init packet
-    //  *char P*
+
+    // get initialization packet and set settings
+    int res = send_to_board ("p");
+    if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        safe_logger (spdlog::level::err, "Board config error:Problem with initialization packet.");
+        delete serial;
+        serial = NULL;
+        return (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+    }
+    std::string packetResponse = read_serial_response ();
+    // parse packet
+
+    if (packetResponse.find ("[") != std::string::npos)
+    {
+        int eegCount = countSubstring (packetResponse, "0x02") * 8;
+        int totalSize = eegCount + 2;
+        std::vector<int> eeg_channelsV;
+        for (int i = 0; i < eegCount; i++)
+        {
+            eeg_channelsV.push_back (i);
+        }
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["eeg_channels"] =
+            eeg_channelsV;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["eeg_names"] = {};
+
+        boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"] =
+            totalSize;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["status_channel"] =
+            totalSize - 1;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["battery_channel"] =
+            totalSize;
+    }
+    else
+    {
+        safe_logger (
+            spdlog::level::err, "Board config error: Initialization packet improperly formatted.");
+        safe_logger (spdlog::level::trace, "read {}", packetResponse.c_str ());
+        delete serial;
+        serial = NULL;
+        return (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+    }
     return (int)BrainFlowExitCodes::STATUS_OK;
 }
 
@@ -317,4 +367,81 @@ int NTLAxonComBoard::release_session ()
         serial = NULL;
     }
     return (int)BrainFlowExitCodes::STATUS_OK;
+}
+
+// returns count of non-overlapping occurrences of 'sub' in 'str'
+int countSubstring (const std::string &str, const std::string &sub)
+{
+    if (sub.length () == 0)
+        return 0;
+    int count = 0;
+    for (size_t offset = str.find (sub); offset != std::string::npos;
+         offset = str.find (sub, offset + sub.length ()))
+    {
+        ++count;
+    }
+    return count;
+}
+
+void NTLAxonComBoard::read_thread ()
+{
+    const int totalRows =
+        boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"];
+    const int eegRows = totalRows - 2;
+    const int totalIncomingRows = (eegRows * 3) + (2 * 1) + 1;
+    int res;
+    unsigned char *b = new unsigned char[totalIncomingRows];
+    double *package = new double[totalRows];
+    for (int i = 0; i < totalRows; i++)
+    {
+        package[i] = 0.0;
+    }
+    std::vector<int> eeg_channels = board_descr["default"]["eeg_channels"];
+
+    while (keep_alive)
+    {
+        res = serial->read_from_serial_port (b, totalIncomingRows);
+        if (res != totalIncomingRows)
+        {
+            if (res < 0)
+            {
+                safe_logger (spdlog::level::warn, "unable to read {} bytes", totalIncomingRows);
+                continue;
+            }
+        }
+        if (b[0] != START_BYTE)
+        {
+        }
+        {
+            continue;
+        }
+        int remaining_bytes = totalIncomingRows;
+        int pos = 0;
+        while ((remaining_bytes > 0) && (keep_alive))
+        {
+            res = serial->read_from_serial_port (b + pos, remaining_bytes);
+            remaining_bytes -= res;
+            pos += res;
+        }
+        if (!keep_alive)
+        {
+            break;
+        }
+        if ((b[totalIncomingRows - 1] != STOP_BYTE))
+        {
+            safe_logger (spdlog::level::warn, "Wrong end byte {}", b[totalIncomingRows - 1]);
+            continue;
+        }
+        // package[board_descr["default"]["package_num_channel"].get<int> ()] = (double)b[0];
+        // TODO implement package number channel
+        for (int i = 0; i < eeg_channels.size (); i + 3)
+        {
+            package[i] = ((double)cast_24bit_to_int32 (b + 3 * i));
+        }
+        // status
+        package[eegRows] = ((double)cast_16bit_to_int32 (b + totalIncomingRows - 3));
+        // battery level
+        package[eegRows + 1] = ((double)b[totalIncomingRows - 1]);
+        push_package (&(package[0]));
+    }
 }
