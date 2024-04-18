@@ -1,9 +1,10 @@
+#include <string.h>
 #include <string>
 
+#include "brainflow_boards.h"
 #include "custom_cast.h"
 #include "ntl_axon_ble.h"
 #include "timestamp.h"
-#include "brainflow_boards.h"
 
 #define BOARDID 56
 #define START_BYTE 0x0A
@@ -351,48 +352,67 @@ void NTLAxonBLEBoard::adapter_1_on_scan_found (
 //     Byte [N-1]: Battery level
 //     Byte [N]: 0xCX where X is 0-F in hex
 
+
+// outgoing
+// 0-n eeg data
+// n+1 status
+// n+2 battery level
 void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic,
     uint8_t *data, size_t size, int channel_num)
 {
-    // boards_struct
-                // .brainflow_boards_json["boards"][std::to_string (board_id)][preset_str][param_name];
-    if(size==10){
-        //figure out how many eeg channels and their locations
-        
-    //     {
-    //     {"name", "Cyton"},
-    //     {"sampling_rate", 250},
-    //     {"package_num_channel", 0},
-    //     {"timestamp_channel", 22},
-    //     {"marker_channel", 23},
-    //     {"num_rows", 24},
-    //     {"eeg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
-    //     {"eeg_names", "Fp1,Fp2,C3,C4,P7,P8,O1,O2"},
-    //     {"emg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
-    //     {"ecg_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
-    //     {"eog_channels", {1, 2, 3, 4, 5, 6, 7, 8}},
-    //     {"accel_channels", {9, 10, 11}},
-    //     {"analog_channels", {19, 20, 21}},
-    //     {"other_channels", {12, 13, 14, 15, 16, 17, 18}}
-    // };
-        boards_struct.brainflow_boards_json["boards"][std:to_string(56)]["default"][""]
-        //initialization packet
-        //set channel definitions
-        //set package size and channel destinations
-    }
-    //loop through incoming package and map into outgoing packet
-    if ((data[0] == START_BYTE) && (data[45] == STOP_BYTE))
+
+    if (size == 10)
     {
-        double package_data[13] = {0};
-        for (int i = 3; i < 11; i++)
+        // get the number of eeg channels by detecting the
+        //  number of eeg module ids and multiplying by 3
+        int eeg_module_count = 0;
+        for (int i = 0; i < size; i++)
         {
-            package_data[i - 3] = (double)data[i];
+            if (data[i] == 0x02)
+            {
+                eeg_module_count++;
+            }
         }
-        // status
-        package_data[8] = (double)data[11];
-        // battery level
-        package_data[9] = (double)data[12];
-        push_package (&package_data[0]);
+        std::vector<int> eeg_channelsV;
+        for (int i = 0; i < eeg_module_count * 8; i++)
+        {
+            eeg_channelsV.push_back (i);
+        }
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["eeg_channels"] =
+            eeg_channelsV;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["eeg_names"] = {};
+
+        boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"] =
+            eeg_channelsV.size () + 2;
+
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["status_channel"] =
+            eeg_channelsV.size () + 2;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["battery_channel"] =
+            eeg_channelsV.size () + 1;
+    }
+    else
+    {
+        // loop through incoming package and map into outgoing packet
+        if ((data[0] == START_BYTE) && (data[size] == STOP_BYTE))
+        {
+            int eeg_rows =
+                boards_struct
+                    .brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"];
+            std::vector<double> package_data (eeg_rows + 2);
+            for (int i = 0; i < eeg_rows; i + 3)
+            {
+                package_data.push_back ((double)cast_24bit_to_int32 (data + 3 * i));
+            }
+            // status
+            package_data.push_back ((double)cast_16bit_to_int32 (data + size - 3));
+            // battery level
+            package_data.push_back ((double)data[size - 1]);
+            push_package (&((package_data.data ())[0]));
+        }
     }
 }
 
@@ -405,13 +425,15 @@ int NTLAxonBLEBoard::sendCommand (std::string commandString)
     bool result = false;
     if (strcmp (commandString.data (), "start") == 0)
     {
-        uint8_t command[8] = {0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x0a, 0x0d};
+        // send b
+        uint8_t command[8] = {0x0a, 0x62, 0x0d};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
             write_characteristics.second, command, 6);
     }
     else if (strcmp (commandString.data (), "stop") == 0)
     {
-        uint8_t command[7] = {0x0a, 0x73, 0x74, 0x6f, 0x70, 0x0a, 0x0d};
+        // send h
+        uint8_t command[7] = {0x0a, 0x68, 0x0d};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
             write_characteristics.second, command, 5);
     }
