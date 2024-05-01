@@ -82,7 +82,8 @@ SET (BOARD_CONTROLLER_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/muse/muse.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/brainalive/brainalive.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/emotibit/emotibit.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/ntl/ntl_wifi.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/ntl/ntl_axon_ble.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/ntl/ntl_axon_com.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/board_controller/aavaa/aavaa_v3.cpp
 )
 

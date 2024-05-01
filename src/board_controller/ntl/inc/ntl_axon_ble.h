@@ -23,6 +23,9 @@ public:
     void read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic, uint8_t *data,
         size_t size, int channel_num);
 
+    int config_board (std::string commandString);
+    int config_board (std::string commandString, std::string &response);
+
 protected:
     volatile simpleble_adapter_t ntlAxonAdapter;
     volatile simpleble_peripheral_t ntlAxonPeripheral;

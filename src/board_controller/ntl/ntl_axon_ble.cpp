@@ -206,8 +206,7 @@ int NTLAxonBLEBoard::start_stream (int buffer_size, const char *streamer_params)
     int res = prepare_for_acquisition (buffer_size, streamer_params);
     if (res != (int)BrainFlowExitCodes::STATUS_OK)
     {
-        // TODO get command for start
-        res = sendCommand ("start");
+        res = sendCommand ("b");
     }
     if (res == (int)BrainFlowExitCodes::STATUS_OK)
     {
@@ -415,6 +414,18 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
         }
     }
 }
+
+
+int NTLAxonBLEBoard::config_board (std::string commandString, std::string &response)
+{
+    return NTLAxonBLEBoard::sendCommand (commandString, response);
+}
+
+int NTLAxonBLEBoard::config_board (std::string commandString)
+{
+    return NTLAxonBLEBoard::sendCommand (commandString);
+}
+
 
 int NTLAxonBLEBoard::sendCommand (std::string commandString)
 {

@@ -22,7 +22,8 @@ protected:
 
 
 public:
-    NTLAxonComBoard (struct BrainFlowInputParams params, int board_id);
+int config_board (std::string command, std::string &response);
+    NTLAxonComBoard (struct BrainFlowInputParams params);
     NTLAxonComBoard ();
     int prepare_session ();
     int start_stream (int buffer_size, const char *streamer_params);

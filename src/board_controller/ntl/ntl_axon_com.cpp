@@ -19,8 +19,8 @@
 // b for begin streaming
 // h for halt streaming
 
-NTLAxonComBoard::NTLAxonComBoard (struct BrainFlowInputParams params, int board_id)
-    : Board (board_id, params)
+NTLAxonComBoard::NTLAxonComBoard (struct BrainFlowInputParams params)
+    : Board ((int)(BoardIds::NTL_AXON_COM_BOARD), params)
 {
     serial = NULL;
     is_streaming = false;
@@ -52,6 +52,11 @@ int NTLAxonComBoard::open_port ()
     }
     safe_logger (spdlog::level::trace, "port {} is open", serial->get_port_name ());
     return (int)BrainFlowExitCodes::STATUS_OK;
+}
+
+int NTLAxonComBoard::config_board(std::string command, std::string &response)
+{
+    return sendCommand(command, response);
 }
 
 int NTLAxonComBoard::sendCommand (std::string command, std::string &response)
@@ -234,8 +239,6 @@ int NTLAxonComBoard::prepare_session ()
         serial = NULL;
         return initted;
     }
-    // TODO change this command?
-    // i for initialize?
     int send_res = send_to_board ("i");
     if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
     {
@@ -315,9 +318,6 @@ int NTLAxonComBoard::start_stream (int buffer_size, const char *streamer_params)
     {
         return res;
     }
-
-    // begin streaming
-    // TODO change command?
     int send_res = send_to_board ("b");
     if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
     {
@@ -339,8 +339,6 @@ int NTLAxonComBoard::stop_stream ()
         {
             streaming_thread.join ();
         }
-        // halt streaming
-        // TODO change command?
         return send_to_board ("h");
     }
     else
