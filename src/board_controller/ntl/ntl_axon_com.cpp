@@ -54,9 +54,9 @@ int NTLAxonComBoard::open_port ()
     return (int)BrainFlowExitCodes::STATUS_OK;
 }
 
-int NTLAxonComBoard::config_board(std::string command, std::string &response)
+int NTLAxonComBoard::config_board (std::string command, std::string &response)
 {
-    return sendCommand(command, response);
+    return sendCommand (command, response);
 }
 
 int NTLAxonComBoard::sendCommand (std::string command, std::string &response)
@@ -258,7 +258,7 @@ int NTLAxonComBoard::prepare_session ()
     initialized = true;
 
     // get initialization packet and set settings
-    int res = send_to_board ("p");
+    res = send_to_board ("p");
     if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         safe_logger (spdlog::level::err, "Board config error:Problem with initialization packet.");
@@ -271,7 +271,7 @@ int NTLAxonComBoard::prepare_session ()
 
     if (packetResponse.find ("[") != std::string::npos)
     {
-        int eegCount = countSubstring (packetResponse, "0x02") * 8;
+        int eegCount = NTLAxonComBoard::countSubstring (packetResponse, "0x02") * 8;
         int totalSize = eegCount + 2;
         std::vector<int> eeg_channelsV;
         for (int i = 0; i < eegCount; i++)
@@ -368,7 +368,7 @@ int NTLAxonComBoard::release_session ()
 }
 
 // returns count of non-overlapping occurrences of 'sub' in 'str'
-int countSubstring (const std::string &str, const std::string &sub)
+int NTLAxonComBoard::countSubstring (const std::string &str, const std::string &sub)
 {
     if (sub.length () == 0)
         return 0;
@@ -432,7 +432,7 @@ void NTLAxonComBoard::read_thread ()
         }
         // package[board_descr["default"]["package_num_channel"].get<int> ()] = (double)b[0];
         // TODO implement package number channel
-        for (int i = 0; i < eeg_channels.size (); i + 3)
+        for (int i = 0; i < eeg_channels.size (); i += 3)
         {
             package[i] = ((double)cast_24bit_to_int32 (b + 3 * i));
         }

@@ -19,12 +19,13 @@ protected:
     int send_to_board (const char *msg);
     int send_to_board (const char *msg, std::string &response);
     std::string read_serial_response ();
+    int countSubstring (const std::string &str, const std::string &sub);
 
 
 public:
-int config_board (std::string command, std::string &response);
+    int config_board (std::string command, std::string &response);
     NTLAxonComBoard (struct BrainFlowInputParams params);
-    NTLAxonComBoard ();
+    ~NTLAxonComBoard ();
     int prepare_session ();
     int start_stream (int buffer_size, const char *streamer_params);
     int stop_stream ();

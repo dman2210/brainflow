@@ -145,7 +145,7 @@ int NTLAxonBLEBoard::prepare_session ()
             if (strcmp (service.characteristics[1].uuid.value, notify_characteristic_uuid) == 0)
             {
                 if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
-                        service.characteristics[1].uuid, ::ntlAxon_read_notifications,
+                        service.characteristics[1].uuid, NTLAxonBLEBoard::ntlAxon_read_notifications,
                         (void *)this) == SIMPLEBLE_SUCCESS)
                 {
                     notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
@@ -402,7 +402,7 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
                 boards_struct
                     .brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"];
             std::vector<double> package_data (eeg_rows + 2);
-            for (int i = 0; i < eeg_rows; i + 3)
+            for (int i = 0; i < eeg_rows; i += 3)
             {
                 package_data.push_back ((double)cast_24bit_to_int32 (data + 3 * i));
             }
@@ -418,7 +418,8 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
 
 int NTLAxonBLEBoard::config_board (std::string commandString, std::string &response)
 {
-    return NTLAxonBLEBoard::sendCommand (commandString, response);
+    //TODO implement
+    return NTLAxonBLEBoard::sendCommand (commandString);
 }
 
 int NTLAxonBLEBoard::config_board (std::string commandString)

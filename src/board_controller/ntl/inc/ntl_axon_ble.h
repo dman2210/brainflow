@@ -29,6 +29,8 @@ public:
 protected:
     volatile simpleble_adapter_t ntlAxonAdapter;
     volatile simpleble_peripheral_t ntlAxonPeripheral;
+    static void ntlAxon_read_notifications (simpleble_uuid_t service,
+        simpleble_uuid_t characteristic, uint8_t *data, size_t size, void *board);
     bool initialized;
     bool is_streaming;
     std::mutex m;
