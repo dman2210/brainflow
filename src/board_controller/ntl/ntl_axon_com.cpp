@@ -258,7 +258,7 @@ int NTLAxonComBoard::prepare_session ()
     initialized = true;
 
     // get initialization packet and set settings
-    res = send_to_board ("p");
+    send_res = send_to_board ("p");
     if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         safe_logger (spdlog::level::err, "Board config error:Problem with initialization packet.");
