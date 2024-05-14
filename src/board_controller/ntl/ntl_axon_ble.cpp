@@ -50,6 +50,11 @@ int NTLAxonBLEBoard::prepare_session ()
     {
         params.timeout = 5;
     }
+    if (!init_dll_loader ())
+    {
+        safe_logger (spdlog::level::err, "Failed to init dll_loader");
+        return (int)BrainFlowExitCodes::GENERAL_ERROR;
+    }
     // count on computer adapters
     size_t num_adapters = simpleble_adapter_get_count ();
     if (num_adapters == 0)
@@ -59,6 +64,7 @@ int NTLAxonBLEBoard::prepare_session ()
     }
     // get a handle on the first adapter on the computer
     ntlAxonAdapter = simpleble_adapter_get_handle (0);
+    if (ntlAxonAdapter == NULL)
     {
         safe_logger (spdlog::level::err, "Adapter is NULL");
         return (int)BrainFlowExitCodes::UNABLE_TO_OPEN_PORT_ERROR;
@@ -82,6 +88,10 @@ int NTLAxonBLEBoard::prepare_session ()
     if (cv.wait_for (lk, params.timeout * sec, [this] { return this->ntlAxonPeripheral != NULL; }))
     {
         safe_logger (spdlog::level::info, "Found NTL Bluetooth Board");
+        safe_logger (spdlog::level::info,
+            json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
+                      .dump ())
+                .dump ());
         res = (int)BrainFlowExitCodes::STATUS_OK;
     }
     simpleble_adapter_scan_stop (ntlAxonAdapter);
@@ -145,7 +155,7 @@ int NTLAxonBLEBoard::prepare_session ()
             if (strcmp (service.characteristics[1].uuid.value, notify_characteristic_uuid) == 0)
             {
                 if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
-                        service.characteristics[1].uuid, NTLAxonBLEBoard::ntlAxon_read_notifications,
+                        service.characteristics[1].uuid, ::ntl_read_notifications,
                         (void *)this) == SIMPLEBLE_SUCCESS)
                 {
                     notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
@@ -193,8 +203,18 @@ int NTLAxonBLEBoard::prepare_session ()
         {
             release_session ();
         }
-        return res;
+        safe_logger (spdlog::level::info,
+            json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
+                      .dump ())
+                .dump ());
+        safe_logger (spdlog::level::info, "sending initialization packet command");
+        int res = sendCommand ("p");
+        if (res != (int)BrainFlowExitCodes::STATUS_OK)
+        {
+            safe_logger (spdlog::level::err, "Failed to send initializtion command");
+        }
     }
+    return res;
 }
 
 int NTLAxonBLEBoard::start_stream (int buffer_size, const char *streamer_params)
@@ -226,7 +246,7 @@ int NTLAxonBLEBoard::stop_stream ()
     int res = (int)BrainFlowExitCodes::STATUS_OK;
     if (is_streaming)
     {
-        res = sendCommand ("stop");
+        res = sendCommand ("h");
     }
     else
     {
@@ -251,6 +271,8 @@ int NTLAxonBLEBoard::release_session ()
 #else
             sleep (2);
 #endif
+            // TODO verify that we dont need this in more places
+            int res = sendCommand ("c");
             if (simpleble_peripheral_unsubscribe (ntlAxonPeripheral, notified_characteristics.first,
                     notified_characteristics.second) != SIMPLEBLE_SUCCESS)
             {
@@ -287,11 +309,6 @@ int NTLAxonBLEBoard::release_session ()
     return (int)BrainFlowExitCodes::STATUS_OK;
 }
 
-static void ntlAxon_read_notifications (simpleble_uuid_t service, simpleble_uuid_t characteristic,
-    uint8_t *data, size_t size, void *board)
-{
-    ((NTLAxonBLEBoard *)(board))->read_data (service, characteristic, data, size, 0);
-}
 
 void NTLAxonBLEBoard::adapter_1_on_scan_found (
     simpleble_adapter_t adapter, simpleble_peripheral_t peripheral)
@@ -359,7 +376,7 @@ void NTLAxonBLEBoard::adapter_1_on_scan_found (
 void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t characteristic,
     uint8_t *data, size_t size, int channel_num)
 {
-
+    safe_logger (spdlog::level::info, "in the read thread now.");
     if (size == 10)
     {
         // get the number of eeg channels by detecting the
@@ -388,10 +405,16 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
 
         boards_struct
             .brainflow_boards_json["boards"][std::to_string (56)]["default"]["status_channel"] =
-            eeg_channelsV.size () + 2;
+            eeg_channelsV.size () + 1;
         boards_struct
             .brainflow_boards_json["boards"][std::to_string (56)]["default"]["battery_channel"] =
-            eeg_channelsV.size () + 1;
+            eeg_channelsV.size () + 2;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["timestamp_channel"] =
+            eeg_channelsV.size () + 3;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["marker_channel"] =
+            eeg_channelsV.size () + 4;
     }
     else
     {
@@ -410,6 +433,8 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
             package_data.push_back ((double)cast_16bit_to_int32 (data + size - 3));
             // battery level
             package_data.push_back ((double)data[size - 1]);
+            // timestamp
+            package_data.push_back (get_timestamp ());
             push_package (&((package_data.data ())[0]));
         }
     }
@@ -418,7 +443,7 @@ void NTLAxonBLEBoard::read_data (simpleble_uuid_t service, simpleble_uuid_t char
 
 int NTLAxonBLEBoard::config_board (std::string commandString, std::string &response)
 {
-    //TODO implement
+    // TODO implement
     return NTLAxonBLEBoard::sendCommand (commandString);
 }
 
@@ -435,19 +460,19 @@ int NTLAxonBLEBoard::sendCommand (std::string commandString)
         return (int)BrainFlowExitCodes::BOARD_NOT_CREATED_ERROR;
     }
     bool result = false;
-    if (strcmp (commandString.data (), "start") == 0)
+    if (strcmp (commandString.data (), "b") == 0)
     {
         // send b
-        uint8_t command[8] = {0x0a, 0x62, 0x0d};
+        uint8_t command[3] = {0x0a, 0x62, 0x0d};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
-            write_characteristics.second, command, 6);
+            write_characteristics.second, command, 3);
     }
-    else if (strcmp (commandString.data (), "stop") == 0)
+    else if (strcmp (commandString.data (), "h") == 0)
     {
         // send h
-        uint8_t command[7] = {0x0a, 0x68, 0x0d};
+        uint8_t command[3] = {0x0a, 0x68, 0x0d};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
-            write_characteristics.second, command, 5);
+            write_characteristics.second, command, 3);
     }
     else
     {

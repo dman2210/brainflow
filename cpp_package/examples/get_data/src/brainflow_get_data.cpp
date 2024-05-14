@@ -18,22 +18,36 @@ bool parse_args (int argc, char *argv[], struct BrainFlowInputParams *params, in
 int main (int argc, char *argv[])
 {
     BoardShim::enable_dev_board_logger ();
-
-    BoardShim::get_board_presets (-1);
     struct BrainFlowInputParams params;
     int board_id = 0;
     if (!parse_args (argc, argv, &params, &board_id))
     {
         return -1;
     }
+    board_id = 56;
+   //params.serial_port = "COM3";
+    params.mac_address = "f4:61:4a:b7:26:0c";
     int res = 0;
-
     BoardShim *board = new BoardShim (board_id, params);
 
     try
     {
         board->prepare_session ();
-        board->start_stream ();
+        if (board->is_prepared ())
+        {
+            board->start_stream ();
+            Sleep (1500);
+            std::vector<int> eeegChannels = board->get_eeg_channels (56);
+            BrainFlowArray<double, 2Ui64> data = board->get_board_data ();
+            int thing = 0;
+            thing++;
+        }
+        else
+        {
+            int thing = 1;
+            thing++;
+        }
+        
 
 #ifdef _WIN32
         Sleep (5000);

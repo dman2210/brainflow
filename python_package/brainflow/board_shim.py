@@ -74,6 +74,8 @@ class BoardIds(enum.IntEnum):
     AAVAA_V3_BOARD = 53 #:
     EXPLORE_PLUS_8_CHAN_BOARD = 54 #:
     EXPLORE_PLUS_32_CHAN_BOARD = 55 #:
+    NTL_BLE_BOARD = 56 #:
+    NTL_COM_BOARD = 57 #:
 
 
 class IpProtocolTypes(enum.IntEnum):
