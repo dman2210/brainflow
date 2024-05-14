@@ -4,6 +4,7 @@
 #include "custom_cast.h"
 #include "ntl_axon_com.h"
 #include "serial.h"
+#include "timestamp.h"
 
 #ifdef _WIN32
 #include "windows_registry.h"
@@ -151,7 +152,7 @@ int NTLAxonComBoard::set_port_settings ()
     return send_to_board ("v");
 }
 
-INT NTLAxonComBoard::status_check ()
+int NTLAxonComBoard::status_check ()
 {
     unsigned char buf[1];
     int count = 0;
@@ -232,47 +233,23 @@ int NTLAxonComBoard::prepare_session ()
         return set_settings;
     }
 
-    int initted = status_check ();
-    if (initted != (int)BrainFlowExitCodes::STATUS_OK)
-    {
-        delete serial;
-        serial = NULL;
-        return initted;
-    }
-    int send_res = send_to_board ("i");
-    if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
-    {
-        return send_res;
-    }
-    // board sends response back, clean serial buffer and analyze response
-    std::string response = read_serial_response ();
-    if (response.substr (0, 7).compare ("Failure") == 0)
-    {
-        safe_logger (spdlog::level::err, "Board config error.");
-        safe_logger (spdlog::level::trace, "read {}", response.c_str ());
-        delete serial;
-        serial = NULL;
-        return (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
-    }
-
     initialized = true;
 
-    // get initialization packet and set settings
-    send_res = send_to_board ("p");
-    if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
-    {
-        safe_logger (spdlog::level::err, "Board config error:Problem with initialization packet.");
-        delete serial;
-        serial = NULL;
-        return (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
-    }
+    int send_res = send_to_board ("p");
+    // if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
+    // {
+    //     safe_logger (spdlog::level::err, "Board config error:Problem sending command for
+    //     initialization packet."); delete serial; serial = NULL; return
+    //     (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+    // }
     std::string packetResponse = read_serial_response ();
     // parse packet
-
-    if (packetResponse.find ("[") != std::string::npos)
+    // 0x0A start byte
+    // TODO add length check to make sure it is initilization
+    if (packetResponse.find (START_BYTE) != std::string::npos)
     {
         int eegCount = NTLAxonComBoard::countSubstring (packetResponse, "0x02") * 8;
-        int totalSize = eegCount + 2;
+        int totalSize = eegCount + 4;
         std::vector<int> eeg_channelsV;
         for (int i = 0; i < eegCount; i++)
         {
@@ -288,9 +265,15 @@ int NTLAxonComBoard::prepare_session ()
             totalSize;
         boards_struct
             .brainflow_boards_json["boards"][std::to_string (56)]["default"]["status_channel"] =
-            totalSize - 1;
+            totalSize - 3;
         boards_struct
             .brainflow_boards_json["boards"][std::to_string (56)]["default"]["battery_channel"] =
+            totalSize - 2;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["timestamp_channel"] =
+            totalSize - 1;
+        boards_struct
+            .brainflow_boards_json["boards"][std::to_string (56)]["default"]["marker_channel"] =
             totalSize;
     }
     else
@@ -360,6 +343,7 @@ int NTLAxonComBoard::release_session ()
     }
     if (serial)
     {
+        int send_res = send_to_board ("c");
         serial->close_serial_port ();
         delete serial;
         serial = NULL;
@@ -440,6 +424,8 @@ void NTLAxonComBoard::read_thread ()
         package[eegRows] = ((double)cast_16bit_to_int32 (b + totalIncomingRows - 3));
         // battery level
         package[eegRows + 1] = ((double)b[totalIncomingRows - 1]);
+        // timestamp
+        package[eegRows + 2] = get_timestamp ();
         push_package (&(package[0]));
     }
 }

@@ -7,12 +7,14 @@
 // 0-n eeg data
 // n+1 status
 // n+2 battery level
+// n+2 timestamp channel
+// n+3 marker channel
 
 // commands
-// i for init (com only)
-// p for initialization packet (com only)
+// p for initialization packet
 // b for begin streaming
 // h for halt streaming
+// c for close
 
 // Standard data packet:
 //     Byte 1: 0xA0

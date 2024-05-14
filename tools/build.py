@@ -103,8 +103,8 @@ def get_win_generators():
              'displayName'])
         output = output.decode('utf-8', 'ignore')
         print(output)
-        # if '2022' in output:
-        #     result.append(VS2022())
+        if '2022' in output:
+            result.append(VS2022())
         if '2019' in output:
             result.append(VS2019())
         if '2017' in output:

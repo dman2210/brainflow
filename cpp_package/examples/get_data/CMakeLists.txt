@@ -4,6 +4,8 @@ project (BRAINFLOW_GET_DATA)
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_VERBOSE_MAKEFILE ON)
 
+list(APPEND CMAKE_PREFIX_PATH C:\\repos\\brainflowForked\\installed)
+
 macro (configure_msvc_runtime)
     if (MSVC)
         # Default to statically-linked runtime.
@@ -50,25 +52,32 @@ find_package (
     brainflow CONFIG REQUIRED
 )
 
+message(STATUS "BrainFlow found.")
+
 add_executable (
     brainflow_get_data
     src/brainflow_get_data.cpp
 )
+
+message(STATUS "added executable.")
 
 target_include_directories (
     brainflow_get_data PUBLIC
     ${brainflow_INCLUDE_DIRS}
 )
 
+message(STATUS "targeted include dirs.")
+
 target_link_libraries (
     brainflow_get_data PUBLIC
     # for some systems(ubuntu for example) order matters
     ${BrainflowPath}
-    ${MLModulePath}
-    ${DataHandlerPath}
     ${BoardControllerPath}
 )
 
+message(STATUS "linked librariiesd.")
+message(STATUS "BrainFlowPath: ${BrainflowPath}")
+message(STATUS "Inluce dirs ${brainflow_INCLUDE_DIRS}")
 add_executable (
     markers
     src/markers.cpp
