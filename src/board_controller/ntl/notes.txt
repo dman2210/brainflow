@@ -7,10 +7,11 @@
 // 0-n eeg data
 // n+1 status
 // n+2 battery level
+// n+3 Sample number
 
 // commands
 // i for init (com only)
-// p for initialization packet (com only)
+// p for initialization packet
 // b for begin streaming
 // h for halt streaming
 
@@ -81,10 +82,10 @@
 // The standard packet should be constructed based on the initialization packet that is recieved. 
 // For each module identifier, it will have a fixed definition of what data is contained and how to parse it. 
 
-// Continuously posting this packet to the TX channel until there's a start command
+// Waits for 'p' command. Every module is 8 channels.
 // Initialization packet: 
 // Byte 1: 0x0A
-// Byte 2: Module ID at position 1 0x02
+// Byte 2: Module ID at position 1 0x02 (2 is EEG, with others implemented in future, potentially)
 // Byte 3: Module ID at position 2 0x01
 // Byte 4: Module ID at position 3 0x01
 // Byte 5: Module ID at position 4 0x01

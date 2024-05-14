@@ -409,8 +409,7 @@ void NTLAxonComBoard::read_thread ()
         }
         if (b[0] != START_BYTE)
         {
-        }
-        {
+            safe_logger (spdlog::level::warn, "Invalid start byte");
             continue;
         }
         int remaining_bytes = totalIncomingRows;
@@ -430,8 +429,7 @@ void NTLAxonComBoard::read_thread ()
             safe_logger (spdlog::level::warn, "Wrong end byte {}", b[totalIncomingRows - 1]);
             continue;
         }
-        // package[board_descr["default"]["package_num_channel"].get<int> ()] = (double)b[0];
-        // TODO implement package number channel
+        package[board_descr["default"]["package_num_channel"].get<int> ()] = (double)b[2];
         for (int i = 0; i < eeg_channels.size (); i += 3)
         {
             package[i] = ((double)cast_24bit_to_int32 (b + 3 * i));
