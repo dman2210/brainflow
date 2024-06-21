@@ -1,16 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="C:\repos\brainflowForked\cpp_package\examples\get_data\src\brainflow_get_data.cpp">
+    <ClCompile Include="C:\repos\brainflow\cpp_package\examples\get_data\src\brainflow_get_data.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="C:\repos\brainflowForked\cpp_package\examples\get_data\CMakeLists.txt" />
+    <CustomBuild Include="C:\repos\brainflow\cpp_package\examples\get_data\CMakeLists.txt" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">
-      <UniqueIdentifier>{C93545E2-ADCF-37A0-B570-65E91318EC23}</UniqueIdentifier>
+      <UniqueIdentifier>{2018F483-C790-3DCB-88F7-47520F41C148}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

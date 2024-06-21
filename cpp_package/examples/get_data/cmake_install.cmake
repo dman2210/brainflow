@@ -1,4 +1,4 @@
-# Install script for directory: C:/repos/brainflowForked/cpp_package/examples/get_data
+# Install script for directory: C:/repos/brainflow/cpp_package/examples/get_data
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -40,5 +40,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/repos/brainflowForked/cpp_package/examples/get_data/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "C:/repos/brainflow/cpp_package/examples/get_data/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

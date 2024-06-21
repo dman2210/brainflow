@@ -1,4 +1,6 @@
+#include <chrono>
 #include <string.h>
+#include <thread>
 
 #include "brainflow_boards.h"
 #include "custom_cast.h"
@@ -12,8 +14,7 @@
 
 #define BOARDID 57
 #define START_BYTE 0x0A
-#define STOP_BYTE 0x0D
-
+#define STOP_BYTE 0x0B
 // commands
 // i for init (com only)
 // p for initialization packet (com only)
@@ -149,7 +150,7 @@ int NTLAxonComBoard::set_port_settings ()
     int set_latency_res = serial->set_custom_latency (1);
     safe_logger (spdlog::level::info, "set_latency_res is: {}", set_latency_res);
 #endif
-    return send_to_board ("v");
+    return 0;
 }
 
 int NTLAxonComBoard::status_check ()
@@ -220,6 +221,7 @@ int NTLAxonComBoard::prepare_session ()
     int port_open = open_port ();
     if (port_open != (int)BrainFlowExitCodes::STATUS_OK)
     {
+        send_to_board ("c");
         delete serial;
         serial = NULL;
         return port_open;
@@ -228,6 +230,7 @@ int NTLAxonComBoard::prepare_session ()
     int set_settings = set_port_settings ();
     if (set_settings != (int)BrainFlowExitCodes::STATUS_OK)
     {
+        send_to_board ("c");
         delete serial;
         serial = NULL;
         return set_settings;
@@ -235,20 +238,58 @@ int NTLAxonComBoard::prepare_session ()
 
     initialized = true;
 
-    int send_res = send_to_board ("p");
-    // if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
-    // {
-    //     safe_logger (spdlog::level::err, "Board config error:Problem sending command for
-    //     initialization packet."); delete serial; serial = NULL; return
-    //     (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
-    // }
-    std::string packetResponse = read_serial_response ();
-    // parse packet
-    // 0x0A start byte
-    // TODO add length check to make sure it is initilization
+    int send_res = 0;
+    send_res = send_to_board ("c");
+    std::this_thread::sleep_for (std::chrono::milliseconds (1500));
+    send_res = send_to_board ("p");
+    std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+    if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        safe_logger (spdlog::level::err, "Failed to send initializtion command");
+    }
+    std::string packetResponse = "";
+    packetResponse = read_serial_response ();
+    using timep_t = decltype (std::chrono::steady_clock::now ());
+    timep_t start = std::chrono::steady_clock::now ();
+    timep_t end = std::chrono::steady_clock::now ();
+    uint8_t *responseData = nullptr;
+    int lastPrintedSecond = 0;
+    while (std::chrono::duration_cast<std::chrono::seconds> (end - start).count () < 10 &&
+        packetResponse.size () == 0)
+    {
+        packetResponse += read_serial_response ();
+        int diff = std::chrono::duration_cast<std::chrono::seconds> (end - start).count ();
+        if (diff % 3 == 0)
+        {
+            send_res = send_to_board ("p");
+            if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
+            {
+                safe_logger (spdlog::level::err, "Failed to send initializtion command");
+            }
+        }
+        if (diff > lastPrintedSecond)
+        {
+            lastPrintedSecond = diff;
+            safe_logger (spdlog::level::debug, "Waiting for initialization packet this changes");
+            if (packetResponse.size () != 0)
+            {
+                safe_logger (spdlog::level::debug, "Received packet: {}", packetResponse.c_str ());
+            }
+        }
+        // TODO log response
+        end = std::chrono::steady_clock::now ();
+    }
+    if (packetResponse.size () == 0)
+    {
+        safe_logger (spdlog::level::err, "Empty initialization packet.");
+        res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+        send_to_board ("c");
+        return res;
+    }
+    safe_logger (spdlog::level::debug, "Initialization packet: {}", packetResponse.c_str ());
     if (packetResponse.find (START_BYTE) != std::string::npos)
     {
-        int eegCount = NTLAxonComBoard::countSubstring (packetResponse, "0x02") * 8;
+        int eegCount = NTLAxonComBoard::countSubstring (packetResponse, "2") * 8;
         int totalSize = eegCount + 4;
         std::vector<int> eeg_channelsV;
         for (int i = 0; i < eegCount; i++)
@@ -275,12 +316,21 @@ int NTLAxonComBoard::prepare_session ()
         boards_struct
             .brainflow_boards_json["boards"][std::to_string (56)]["default"]["marker_channel"] =
             totalSize;
+
+        board_descr["default"]["eeg_channels"] = eeg_channelsV;
+        board_descr["default"]["eeg_names"] = {};
+        board_descr["default"]["num_rows"] = totalSize;
+        board_descr["default"]["status_channel"] = totalSize - 3;
+        board_descr["default"]["battery_channel"] = totalSize - 2;
+        board_descr["default"]["timestamp_channel"] = totalSize - 1;
+        board_descr["default"]["marker_channel"] = totalSize;
     }
     else
     {
         safe_logger (
             spdlog::level::err, "Board config error: Initialization packet improperly formatted.");
         safe_logger (spdlog::level::trace, "read {}", packetResponse.c_str ());
+        send_to_board ("c");
         delete serial;
         serial = NULL;
         return (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
@@ -302,6 +352,12 @@ int NTLAxonComBoard::start_stream (int buffer_size, const char *streamer_params)
         return res;
     }
     int send_res = send_to_board ("b");
+    if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
+    {
+        return send_res;
+    }
+    std::this_thread::sleep_for (std::chrono::milliseconds (1200));
+    send_res = send_to_board ("b");
     if (send_res != (int)BrainFlowExitCodes::STATUS_OK)
     {
         return send_res;
@@ -369,8 +425,9 @@ void NTLAxonComBoard::read_thread ()
 {
     const int totalRows =
         boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]["num_rows"];
-    const int eegRows = totalRows - 2;
-    const int totalIncomingRows = (eegRows * 3) + (2 * 1) + 1;
+        //todo store extra rows data in variable or something
+    const int eegRows = totalRows - 4;
+    const int totalIncomingRows = (eegRows * 3) + 4;
     int res;
     unsigned char *b = new unsigned char[totalIncomingRows];
     double *package = new double[totalRows];
@@ -427,3 +484,22 @@ void NTLAxonComBoard::read_thread ()
         push_package (&(package[0]));
     }
 }
+
+// void NTLAxonComBoard::print_settings ()
+// {
+//     safe_logger(spdlog::level::debug, "eeg_channels: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["eeg_channels"].dump());
+//     safe_logger(spdlog::level::debug, "eeg_names: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["eeg_names"].dump());
+//     safe_logger(spdlog::level::debug, "num_rows: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["num_rows"].dump());
+//     safe_logger(spdlog::level::debug, "status_channel: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["status_channel"].dump());
+//     safe_logger(spdlog::level::debug, "battery_channel: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["battery_channel"].dump());
+//     safe_logger(spdlog::level::debug, "timestamp_channel: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["timestamp_channel"].dump());
+//     safe_logger(spdlog::level::debug, "marker_channel: {}", boards_struct.brainflow_boards_json["boards"][std::to_string(56)]["default"]["marker_channel"].dump());
+
+//     safe_logger(spdlog::level::debug, "eeg_channels: {}", board_descr["default"]["eeg_channels"].dump());
+//     safe_logger(spdlog::level::debug, "eeg_names: {}", board_descr["default"]["eeg_names"].dump());
+//     safe_logger(spdlog::level::debug, "num_rows: {}", board_descr["default"]["num_rows"].dump());
+//     safe_logger(spdlog::level::debug, "status_channel: {}", board_descr["default"]["status_channel"].dump());
+//     safe_logger(spdlog::level::debug, "battery_channel: {}", board_descr["default"]["battery_channel"].dump());
+//     safe_logger(spdlog::level::debug, "timestamp_channel: {}", board_descr["default"]["timestamp_channel"].dump());
+//     safe_logger(spdlog::level::debug, "marker_channel: {}", board_descr["default"]["marker_channel"].dump());
+// }

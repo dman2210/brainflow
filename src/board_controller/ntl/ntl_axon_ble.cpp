@@ -1,3 +1,4 @@
+#include <chrono>
 #include <string.h>
 #include <string>
 
@@ -8,9 +9,12 @@
 
 #define BOARDID 56
 #define START_BYTE 0x0A
-#define STOP_BYTE 0x0D
-#define write_characteristic_uuid "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-#define notify_characteristic_uuid "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+#define STOP_BYTE 0x0B
+// #define write_characteristic_uuid "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+// #define notify_characteristic_uuid "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+#define write_characteristic_uuid "00002a00-0000-1000-8000-00805f9b34fb"
+#define notify_characteristic_uuid "00002a01-0000-1000-8000-00805f9b34fb"
 
 static void ntl_adapter_1_on_scan_found (
     simpleble_adapter_t adapter, simpleble_peripheral_t peripheral, void *board)
@@ -88,10 +92,10 @@ int NTLAxonBLEBoard::prepare_session ()
     if (cv.wait_for (lk, params.timeout * sec, [this] { return this->ntlAxonPeripheral != NULL; }))
     {
         safe_logger (spdlog::level::info, "Found NTL Bluetooth Board");
-        safe_logger (spdlog::level::info,
-            json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
-                      .dump ())
-                .dump ());
+        // safe_logger (spdlog::level::info,
+        //     json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
+        //               .dump ())
+        //         .dump ());
         res = (int)BrainFlowExitCodes::STATUS_OK;
     }
     simpleble_adapter_scan_stop (ntlAxonAdapter);
@@ -146,7 +150,7 @@ int NTLAxonBLEBoard::prepare_session ()
         }
         // TODO
         // check to see which characteristic is which
-        if (strcmp (service.characteristics[0].uuid.value, write_characteristic_uuid))
+        if (strcmp (service.characteristics[0].uuid.value, write_characteristic_uuid) == 0)
         {
             write_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
                 service.uuid, service.characteristics[0].uuid);
@@ -154,21 +158,21 @@ int NTLAxonBLEBoard::prepare_session ()
             safe_logger (spdlog::level::info, "found control characteristic");
             if (strcmp (service.characteristics[1].uuid.value, notify_characteristic_uuid) == 0)
             {
-                if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
-                        service.characteristics[1].uuid, ::ntl_read_notifications,
-                        (void *)this) == SIMPLEBLE_SUCCESS)
+                safe_logger (spdlog::level::info, "found notify characteristic");
+                notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
+                    service.uuid, service.characteristics[1].uuid);
+                if (!(simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
+                          service.characteristics[1].uuid, ::ntl_read_notifications,
+                          (void *)this) == SIMPLEBLE_SUCCESS))
                 {
-                    notified_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
-                        service.uuid, service.characteristics[1].uuid);
-                }
-                else
-                {
-                    safe_logger (spdlog::level::err, "failed to notify characteristic");
-                    res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+                    safe_logger (spdlog::level::err, "failed notify characteristic subscription");
+                    // TODO turn back on for production
+                    //  res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+                    //  return res;
                 }
             }
         }
-        else if (strcmp (service.characteristics[1].uuid.value, write_characteristic_uuid))
+        else if (strcmp (service.characteristics[1].uuid.value, write_characteristic_uuid) == 0)
         {
             write_characteristics = std::pair<simpleble_uuid_t, simpleble_uuid_t> (
                 service.uuid, service.characteristics[1].uuid);
@@ -176,6 +180,7 @@ int NTLAxonBLEBoard::prepare_session ()
             safe_logger (spdlog::level::info, "found control characteristic");
             if (strcmp (service.characteristics[0].uuid.value, notify_characteristic_uuid) == 0)
             {
+                safe_logger (spdlog::level::info, "found notify characteristic");
                 if (simpleble_peripheral_notify (ntlAxonPeripheral, service.uuid,
                         service.characteristics[0].uuid, ::ntl_read_notifications,
                         (void *)this) == SIMPLEBLE_SUCCESS)
@@ -186,7 +191,7 @@ int NTLAxonBLEBoard::prepare_session ()
             }
             else
             {
-                safe_logger (spdlog::level::err, "failed to notify characteristic");
+                safe_logger (spdlog::level::err, "failed notify characteristic");
                 res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
             }
         }
@@ -203,16 +208,57 @@ int NTLAxonBLEBoard::prepare_session ()
         {
             release_session ();
         }
-        safe_logger (spdlog::level::info,
-            json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
-                      .dump ())
-                .dump ());
+        // safe_logger (spdlog::level::info,
+        //     json (boards_struct.brainflow_boards_json["boards"][std::to_string (56)]["default"]
+        //               .dump ())
+        //         .dump ());
         safe_logger (spdlog::level::info, "sending initialization packet command");
-        int res = sendCommand ("p");
-        if (res != (int)BrainFlowExitCodes::STATUS_OK)
+        using timep_t = decltype (std::chrono::steady_clock::now ());
+        timep_t start = std::chrono::steady_clock::now ();
+        timep_t end = std::chrono::steady_clock::now ();
+        uint8_t *responseData = nullptr;
+        size_t responseSize = 0;
+        int res = sendCommand ("c");
+        res = sendCommand ("p");
+        while (std::chrono::duration_cast<std::chrono::seconds> (end - start).count () < 10 &&
+            responseSize == 0)
         {
-            safe_logger (spdlog::level::err, "Failed to send initializtion command");
+            if (res != (int)BrainFlowExitCodes::STATUS_OK)
+            {
+                safe_logger (spdlog::level::err, "Failed to send initializtion command");
+            }
+            res += simpleble_peripheral_read (ntlAxonPeripheral, notified_characteristics.first,
+                notified_characteristics.second, &responseData, &responseSize);
+            if (res != (int)BrainFlowExitCodes::STATUS_OK)
+            {
+                safe_logger (
+                    spdlog::level::err, "Failed to read peripheral notification characteristic");
+            }
+            end = std::chrono::steady_clock::now ();
         }
+        if (responseSize==0)
+        {
+            safe_logger (spdlog::level::err, "Response size zero.");
+            if(responseData==nullptr)
+            {
+                safe_logger (spdlog::level::err, "Response pointer is null.");
+            }
+            res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+        }else{
+            safe_logger (spdlog::level::info, "Response size: {}", responseSize);
+            safe_logger (spdlog::level::info, "We have some data!");
+            safe_logger (spdlog::level::info, "Data: {}", responseData[0]);
+        }
+        // int res = sendCommand ("p");
+        // uint8_t* responseData = nullptr;
+        // size_t responseSize=0;
+        // res = simpleble_peripheral_read (ntlAxonPeripheral, notified_characteristics.first,
+        //     notified_characteristics.second, &responseData, &responseSize);
+        // if (res != (int)BrainFlowExitCodes::STATUS_OK)
+        // {
+        //     safe_logger (spdlog::level::err, "Failed to send initializtion command");
+        // }
+        free (responseData);
     }
     return res;
 }
@@ -463,20 +509,34 @@ int NTLAxonBLEBoard::sendCommand (std::string commandString)
     if (strcmp (commandString.data (), "b") == 0)
     {
         // send b
-        uint8_t command[3] = {0x0a, 0x62, 0x0d};
+        uint8_t command[3] = {0x62};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
             write_characteristics.second, command, 3);
     }
     else if (strcmp (commandString.data (), "h") == 0)
     {
         // send h
-        uint8_t command[3] = {0x0a, 0x68, 0x0d};
+        uint8_t command[3] = {0x68};
+        result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
+            write_characteristics.second, command, 3);
+    }
+    else if (strcmp (commandString.data (), "p") == 0)
+    {
+        // send h
+        uint8_t command[3] = {0x70};
+        result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
+            write_characteristics.second, command, 3);
+    }
+    else if (strcmp (commandString.data (), "c") == 0)
+    {
+        // send h
+        uint8_t command[3] = {0x63};
         result = simpleble_peripheral_write_command (ntlAxonPeripheral, write_characteristics.first,
             write_characteristics.second, command, 3);
     }
     else
     {
-        safe_logger (spdlog::level::err, "Unknown command");
+        safe_logger (spdlog::level::err, "Unknown command: " + commandString);
         return (int)BrainFlowExitCodes::INVALID_ARGUMENTS_ERROR;
     }
     if (result)

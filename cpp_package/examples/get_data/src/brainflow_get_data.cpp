@@ -1,6 +1,9 @@
 #include <iostream>
 #include <stdlib.h>
 #include <string>
+#include <chrono>
+#include <thread>
+#include <fstream>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,9 +27,13 @@ int main (int argc, char *argv[])
     {
         return -1;
     }
-    board_id = 56;
-   //params.serial_port = "COM3";
-    params.mac_address = "f4:61:4a:b7:26:0c";
+    //COM
+    board_id = 57;
+    params.serial_port = "COM3";
+
+    //BLE
+    //board_id = 56;
+    //params.mac_address = "f4:61:4a:b7:26:0c";
     int res = 0;
     BoardShim *board = new BoardShim (board_id, params);
 
@@ -36,9 +43,9 @@ int main (int argc, char *argv[])
         if (board->is_prepared ())
         {
             board->start_stream ();
-            Sleep (1500);
             std::vector<int> eeegChannels = board->get_eeg_channels (56);
-            BrainFlowArray<double, 2Ui64> data = board->get_board_data ();
+            BrainFlowArray<double, 2> data = board->get_board_data ();
+            std::cout << data << std::endl;
             int thing = 0;
             thing++;
         }
@@ -50,15 +57,45 @@ int main (int argc, char *argv[])
         
 
 #ifdef _WIN32
-        Sleep (5000);
+        std::this_thread::sleep_for (std::chrono::milliseconds (10000));
 #else
         sleep (5);
 #endif
-
+        ofstream dataFile;
+        dataFile.open ("C:\\Users\\Dman2\\Documents\\Neurocoach\\dataFile.csv");
         board->stop_stream ();
-        BrainFlowArray<double, 2> data = board->get_current_board_data (10);
+        BrainFlowArray<double, 2> data = board->get_board_data ();
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+        board->stop_stream ();
+        data = board->get_current_board_data (1000);
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+        board->stop_stream ();
+        data = board->get_current_board_data (1000);
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+        board->stop_stream ();
+        data = board->get_current_board_data (1000);
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+        board->stop_stream ();
+        data = board->get_current_board_data (1000);
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
+        board->stop_stream ();
+        data = board->get_current_board_data (1000);
+        dataFile << data << std::endl;
+        board->start_stream ();
+        std::this_thread::sleep_for (std::chrono::milliseconds (2000));
         board->release_session ();
-        std::cout << data << std::endl;
+       
+        dataFile.close ();
     }
     catch (const BrainFlowException &err)
     {
@@ -302,11 +339,6 @@ bool parse_args (int argc, char *argv[], struct BrainFlowInputParams *params, in
                 return false;
             }
         }
-    }
-    if (!board_id_found)
-    {
-        std::cerr << "board id is not provided" << std::endl;
-        return false;
     }
     return true;
 }

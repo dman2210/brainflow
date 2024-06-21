@@ -31,4 +31,5 @@ public:
     int stop_stream ();
     int release_session ();
     int sendCommand (std::string config, std::string &response);
+    void print_settings();
 };
