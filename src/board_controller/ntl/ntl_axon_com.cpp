@@ -282,9 +282,9 @@ int NTLAxonComBoard::prepare_session ()
     if (packetResponse.size () == 0)
     {
         safe_logger (spdlog::level::err, "Empty initialization packet.");
-        res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
+        send_res = (int)BrainFlowExitCodes::BOARD_NOT_READY_ERROR;
         send_to_board ("c");
-        return res;
+        return send_res;
     }
     safe_logger (spdlog::level::debug, "Initialization packet: {}", packetResponse.c_str ());
     if (packetResponse.find (START_BYTE) != std::string::npos)
